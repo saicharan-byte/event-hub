@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useEvents } from '../context/EventContext.jsx';
+// Vector Search imports handled via EventContext
 
 function AdminDashboard() {
     const [activePage, setActivePage] = useState('overview');
@@ -9,8 +10,17 @@ function AdminDashboard() {
     const [newEvent, setNewEvent] = useState('');
     const [newEventDate, setNewEventDate] = useState('');
     const [confirmDelete, setConfirmDelete] = useState(null);
-    const { user, registeredUsers, logout } = useAuth();
-    const { events, registrations, addEvent, removeEvent } = useEvents();
+    const [newRegStudentName, setNewRegStudentName] = useState('');
+    const [newRegEmail, setNewRegEmail] = useState('');
+    const [newRegEventName, setNewRegEventName] = useState('');
+    const [newRegPhone, setNewRegPhone] = useState('');
+    // Vector Search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState(null);
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [reindexStatus, setReindexStatus] = useState('');
+    const { user, logout } = useAuth();
+    const { events, registrations, addEvent, removeEvent, addRegistration, searchEvents, reindexEvents } = useEvents();
     const navigate = useNavigate();
 
     const handleAddEvent = () => {
@@ -18,10 +28,36 @@ function AdminDashboard() {
         addEvent(newEvent.trim(), newEventDate);
         setNewEvent(''); setNewEventDate('');
     };
-    const handleRemoveEvent = (n) => { removeEvent(n); setConfirmDelete(null); };
+    const handleAddRegistration = async () => {
+        if (!newRegStudentName.trim() || !newRegEmail.trim() || !newRegEventName || !newRegPhone.trim()) return;
+        await addRegistration({ studentName: newRegStudentName.trim(), email: newRegEmail.trim(), eventName: newRegEventName, phone: newRegPhone.trim() });
+        setNewRegStudentName(''); setNewRegEmail(''); setNewRegEventName(''); setNewRegPhone('');
+    };
+    const handleRemoveEvent = (id) => { removeEvent(id); setConfirmDelete(null); };
     const handleLogout = () => { logout(); navigate('/'); };
 
-    const totalStudents = registeredUsers ? registeredUsers.filter(u => u.role === 'Student').length : 0;
+    // Vector Search handler
+    const handleVectorSearch = async () => {
+        if (!searchQuery.trim()) return;
+        setSearchLoading(true);
+        try {
+            const data = await searchEvents(searchQuery.trim());
+            setSearchResults(data);
+        } catch (err) {
+            console.error('Search failed:', err);
+        } finally {
+            setSearchLoading(false);
+        }
+    };
+
+    const handleReindex = async () => {
+        setReindexStatus('Reindexing...');
+        const result = await reindexEvents();
+        setReindexStatus(result.message || 'Done!');
+        setTimeout(() => setReindexStatus(''), 3000);
+    };
+
+    const totalStudents = 0;
     const uniqueReg = [...new Set(registrations.map(r => r.email))].length;
     const fmt = (d) => d ? new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
     const isExpired = (dateStr) => { if (!dateStr) return false; const today = new Date(); today.setHours(0,0,0,0); return new Date(dateStr+'T00:00:00') < today; };
@@ -111,17 +147,94 @@ function AdminDashboard() {
                     </div>}
 
                     {activePage==='manage-events'&&<div>
-                        <div style={{marginBottom:'32px'}}><h1 style={{fontSize:'1.8rem',fontWeight:800,color:'#fff',marginBottom:'6px'}}>Manage Events</h1><p style={{fontSize:'0.95rem',color:'#9ca3af'}}>View, manage, or remove existing events.</p></div>
+                        <div style={{marginBottom:'32px'}}><h1 style={{fontSize:'1.8rem',fontWeight:800,color:'#fff',marginBottom:'6px'}}>Manage Events</h1><p style={{fontSize:'0.95rem',color:'#9ca3af'}}>View, manage, or remove existing events. <span style={{color:'#818cf8',fontWeight:600}}>Vector Search</span> is available below.</p></div>
+                        
+                        {/* Vector Search Section integrated into Manage Events */}
+                        <div className="glass" style={{borderRadius:'16px',padding:'32px',marginBottom:'36px', borderTop:'4px solid #818cf8'}}>
+                            <div style={{display:'flex', alignItems:'center', gap:'12px', marginBottom:'20px'}}>
+                                <span style={{fontSize:'2rem'}}>🧠</span>
+                                <div>
+                                    <h3 style={{fontSize:'1.3rem',fontWeight:700,color:'#fff',marginBottom:'4px'}}>Semantic Event Search</h3>
+                                    <p style={{fontSize:'0.85rem',color:'#9ca3af'}}>Type a natural language query to find events by meaning, not just exact words.</p>
+                                </div>
+                            </div>
+                            <div style={{display:'flex',gap:'12px', marginBottom:'16px'}}>
+                                <input type="text" placeholder='Try: "coding contest", "artificial intelligence", "sports"' value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleVectorSearch()} style={{...iS,flex:1,fontSize:'1rem',padding:'14px 20px'}}/>
+                                <button onClick={handleVectorSearch} disabled={searchLoading||!searchQuery.trim()} style={{padding:'14px 28px',borderRadius:'12px',background:searchLoading?'#4b5563':'linear-gradient(135deg,#6366f1,#a855f7)',color:'#fff',fontWeight:700,fontSize:'0.95rem',border:'none',cursor:searchLoading?'wait':'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{searchLoading?'⏳ Searching...':'🔍 Search'}</button>
+                            </div>
+                            
+                            <div style={{display:'flex',alignItems:'center',gap:'12px', justifyContent:'space-between'}}>
+                                <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+                                    {['coding competition','tech conference','sports event'].map(s=>(
+                                        <button key={s} onClick={()=>{setSearchQuery(s);}} style={{padding:'4px 12px',borderRadius:'50px',background:'rgba(99,102,241,0.1)',border:'1px solid rgba(99,102,241,0.2)',color:'#818cf8',fontSize:'0.75rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{s}</button>
+                                    ))}
+                                </div>
+                                <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                                    <button onClick={handleReindex} style={{padding:'6px 14px',borderRadius:'8px',background:'rgba(16,185,129,0.15)',border:'1px solid rgba(16,185,129,0.3)',color:'#10b981',fontSize:'0.75rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>🔄 Re-index</button>
+                                    {reindexStatus&&<span style={{fontSize:'0.75rem',color:'#10b981',fontWeight:600}}>{reindexStatus}</span>}
+                                </div>
+                            </div>
+
+                            {/* Search Results */}
+                            {searchResults&&<div style={{marginTop:'24px', paddingTop:'24px', borderTop:'1px solid rgba(255,255,255,0.1)'}}>
+                                <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'16px'}}>
+                                    <h4 style={{fontSize:'1rem',fontWeight:700,color:'#fff'}}>Search Results</h4>
+                                    <span style={{fontSize:'0.7rem',padding:'3px 10px',borderRadius:'50px',background:'rgba(99,102,241,0.15)',color:'#818cf8',fontWeight:700}}>{searchResults.totalResults} found</span>
+                                </div>
+
+                                {searchResults.totalResults===0?<div style={{padding:'20px',textAlign:'center',color:'#6b7280',fontSize:'0.9rem'}}>No matching events found.</div>:
+                                <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+                                    {searchResults.results.map((r,i)=>{
+                                        const pct = Math.round(r.similarity*100);
+                                        const color = pct>=80?'#10b981':pct>=50?'#f59e0b':pct>=30?'#f97316':'#ef4444';
+                                        return <div key={i} style={{background:'rgba(0,0,0,0.2)',borderRadius:'12px',padding:'12px 16px',borderLeft:`3px solid ${color}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                            <div>
+                                                <div style={{fontWeight:700,color:'#fff',fontSize:'0.95rem'}}>{r.name}</div>
+                                                <div style={{fontSize:'0.75rem',color:'#9ca3af',marginTop:'2px'}}>📆 {r.date ? new Date(r.date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : 'N/A'}</div>
+                                            </div>
+                                            <div style={{textAlign:'right'}}>
+                                                <div style={{fontSize:'1.6rem',fontWeight:800,color}}>{pct}%</div>
+                                                <div style={{fontSize:'0.65rem',color:'#6b7280',fontWeight:600,textTransform:'uppercase',marginBottom:'8px'}}>Match</div>
+                                                {/* Delete controls */}
+                                                {confirmDelete===r._id?
+                                                    <div style={{display:'flex',alignItems:'center',gap:'4px',justifyContent:'flex-end'}}>
+                                                        <span style={{fontSize:'0.7rem',color:'#f87171',fontWeight:600}}>Sure?</span>
+                                                        <button onClick={()=>{handleRemoveEvent(r._id);setSearchResults(prev=>({...prev, results: prev.results.filter(res=>res._id!==r._id), totalResults: prev.totalResults-1}));}} style={{padding:'4px 10px',background:'#ef4444',color:'#fff',border:'none',borderRadius:'6px',fontSize:'0.7rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Yes</button>
+                                                        <button onClick={()=>setConfirmDelete(null)} style={{padding:'4px 10px',background:'transparent',color:'#9ca3af',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'6px',fontSize:'0.7rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>No</button>
+                                                    </div>
+                                                    :<button onClick={()=>setConfirmDelete(r._id)} style={{padding:'4px 12px',background:'transparent',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'8px',color:'#f87171',fontSize:'0.7rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>🗑️ Remove</button>
+                                                }
+                                            </div>
+                                        </div>;
+                                    })}
+                                </div>}
+                            </div>}
+                        </div>
+
+                        <h2 style={{fontSize:'1.2rem',fontWeight:700,color:'#fff',marginBottom:'20px'}}>All Current Events</h2>
                         {events.length===0?<div className="glass" style={{borderRadius:'16px',padding:'40px',textAlign:'center',color:'#6b7280'}}>No events to manage.</div>:
                         <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>{events.map((ev,i)=>{const c=registrations.filter(r=>r.eventName===ev.name).length;return <div key={i} className="glass" style={{borderRadius:'16px',padding:'18px 22px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                             <div style={{display:'flex',alignItems:'center',gap:'14px'}}><span style={{fontSize:'1.4rem'}}>🎯</span><div><div style={{fontWeight:600,color:'#fff',fontSize:'0.95rem'}}>{ev.name} {isExpired(ev.date)&&<span style={{fontSize:'0.7rem',padding:'2px 8px',borderRadius:'50px',background:'rgba(239,68,68,0.15)',color:'#f87171',fontWeight:700,marginLeft:'6px'}}>Expired</span>}</div><div style={{fontSize:'0.78rem',color:'#6b7280',marginTop:'2px'}}>📆 {fmt(ev.date)} · {c} registration{c!==1?'s':''}</div></div></div>
-                            {confirmDelete===ev.name?<div style={{display:'flex',alignItems:'center',gap:'8px'}}><span style={{fontSize:'0.82rem',color:'#f87171',fontWeight:600}}>Delete?</span><button onClick={()=>handleRemoveEvent(ev.name)} style={{padding:'6px 16px',background:'#ef4444',color:'#fff',border:'none',borderRadius:'8px',fontSize:'0.8rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Yes</button><button onClick={()=>setConfirmDelete(null)} style={{padding:'6px 16px',background:'transparent',color:'#9ca3af',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'8px',fontSize:'0.8rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>No</button></div>
-                            :<button onClick={()=>setConfirmDelete(ev.name)} style={{padding:'8px 18px',background:'transparent',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'12px',color:'#f87171',fontSize:'0.82rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>🗑️ Remove</button>}
+                            {confirmDelete===ev._id?<div style={{display:'flex',alignItems:'center',gap:'8px'}}><span style={{fontSize:'0.82rem',color:'#f87171',fontWeight:600}}>Delete?</span><button onClick={()=>handleRemoveEvent(ev._id)} style={{padding:'6px 16px',background:'#ef4444',color:'#fff',border:'none',borderRadius:'8px',fontSize:'0.8rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Yes</button><button onClick={()=>setConfirmDelete(null)} style={{padding:'6px 16px',background:'transparent',color:'#9ca3af',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'8px',fontSize:'0.8rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>No</button></div>
+                            :<button onClick={()=>setConfirmDelete(ev._id)} style={{padding:'8px 18px',background:'transparent',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'12px',color:'#f87171',fontSize:'0.82rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>🗑️ Remove</button>}
                         </div>})}</div>}
                     </div>}
 
                     {activePage==='registrations'&&<div>
                         <div style={{marginBottom:'32px'}}><h1 style={{fontSize:'1.8rem',fontWeight:800,color:'#fff',marginBottom:'6px'}}>Student Registrations</h1><p style={{fontSize:'0.95rem',color:'#9ca3af'}}>{registrations.length} total registration{registrations.length!==1?'s':''}.</p></div>
+                        <div className="glass-strong" style={{borderRadius:'16px',padding:'24px',marginBottom:'36px'}}>
+                            <h3 style={{fontSize:'1.1rem',fontWeight:700,color:'#fff',marginBottom:'16px'}}>Add New Registration</h3>
+                            <div style={{display:'flex',gap:'12px',marginBottom:'16px',flexWrap:'wrap'}}>
+                                <input type="text" placeholder="Student Name" value={newRegStudentName} onChange={e=>setNewRegStudentName(e.target.value)} style={{...iS,flex:'1 1 200px'}}/>
+                                <input type="email" placeholder="Email Address" value={newRegEmail} onChange={e=>setNewRegEmail(e.target.value)} style={{...iS,flex:'1 1 200px'}}/>
+                                <input type="tel" placeholder="Phone Number" value={newRegPhone} onChange={e=>setNewRegPhone(e.target.value)} style={{...iS,flex:'1 1 200px'}}/>
+                                <select value={newRegEventName} onChange={e=>setNewRegEventName(e.target.value)} style={{...iS,flex:'1 1 200px',appearance:'none'}}>
+                                    <option value="" disabled style={{color:'#000'}}>Select Event</option>
+                                    {events.map((ev, i)=><option key={i} value={ev.name} style={{color:'#000'}}>{ev.name}</option>)}
+                                </select>
+                            </div>
+                            <button onClick={handleAddRegistration} disabled={!newRegStudentName.trim() || !newRegEmail.trim() || !newRegEventName || !newRegPhone.trim()} style={{width:'100%',padding:'12px',borderRadius:'12px',background:'linear-gradient(to right,#6366f1,#a855f7)',color:'#fff',fontWeight:600,fontSize:'0.9rem',border:'none',cursor:'pointer',fontFamily:'inherit',opacity:(!newRegStudentName.trim() || !newRegEmail.trim() || !newRegEventName || !newRegPhone.trim())?0.5:1}}>+ Add Registration</button>
+                        </div>
                         {registrations.length===0?<div className="glass" style={{borderRadius:'16px',padding:'40px',textAlign:'center',color:'#6b7280'}}>No registrations yet.</div>:
                         <div className="glass" style={{borderRadius:'16px',overflow:'hidden',marginBottom:'36px'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.9rem'}}><thead><tr style={{background:'rgba(255,255,255,0.05)'}}>
                             {['#','Student','Event','Email','Phone'].map(h=><th key={h} style={{padding:'14px 20px',textAlign:'left',fontWeight:600,color:'#9ca3af',fontSize:'0.8rem',textTransform:'uppercase'}}>{h}</th>)}
@@ -139,7 +252,7 @@ function AdminDashboard() {
                     {activePage==='settings'&&<div>
                         <div style={{marginBottom:'32px'}}><h1 style={{fontSize:'1.8rem',fontWeight:800,color:'#fff',marginBottom:'6px'}}>Settings</h1><p style={{fontSize:'0.95rem',color:'#9ca3af'}}>Platform information and admin details.</p></div>
                         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:'20px'}}>
-                            {[{t:'📌 Platform Info',r:[['Platform','EventHub v1.0'],['Environment','Frontend Simulation'],['Framework','React 19 + Vite']]},{t:'👤 Admin Profile',r:[['Name',user?.name||'N/A'],['Email',user?.email||'N/A'],['Role',user?.role||'Admin']]},{t:'📈 Quick Stats',r:[['Total Events',events.length],['Total Registrations',registrations.length],['Total Users',registeredUsers?registeredUsers.length:0]]}].map((c,i)=>(
+                            {[{t:'📌 Platform Info',r:[['Platform','EventHub v1.0'],['Environment','Frontend Simulation'],['Framework','React 19 + Vite']]},{t:'👤 Admin Profile',r:[['Name',user?.name||'N/A'],['Email',user?.email||'N/A'],['Role', user?.role === 2 ? 'Admin' : 'User']]},{t:'📈 Quick Stats',r:[['Total Events',events.length],['Total Registrations',registrations.length]]}].map((c,i)=>(
                                 <div key={i} className="glass" style={{borderRadius:'16px',padding:'28px'}}><h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#fff',marginBottom:'20px',paddingBottom:'12px',borderBottom:'1px solid rgba(255,255,255,0.1)'}}>{c.t}</h3>{c.r.map(([l,v],j)=><div key={j} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderTop:j>0?'1px solid rgba(255,255,255,0.03)':'none'}}><span style={{fontSize:'0.88rem',color:'#9ca3af'}}>{l}</span><span style={{fontSize:'0.88rem',color:'#fff',fontWeight:600}}>{v}</span></div>)}</div>
                             ))}
                         </div>

@@ -8,13 +8,13 @@ function Signup() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [role, setRole] = useState('Student');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [loading, setLoading] = useState(false);
     const { signup } = useAuth();
     const navigate = useNavigate();
 
-    const handleSignup = (e) => {
+    const handleSignup = async (e) => {
         e.preventDefault();
         setError('');
         setSuccess('');
@@ -25,7 +25,10 @@ function Signup() {
         if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
         if (password !== confirmPassword) { setError('Passwords do not match'); return; }
 
-        const result = signup(name.trim(), email.trim(), password, role);
+        setLoading(true);
+        const result = await signup(name.trim(), email.trim(), password);
+        setLoading(false);
+
         if (!result.success) { setError(result.message); return; }
         setSuccess('Account created successfully! Redirecting to login...');
         setTimeout(() => navigate('/'), 1500);
@@ -116,52 +119,19 @@ function Signup() {
                                 </div>
                             </div>
 
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={labelStyle}>I am a</label>
-                                <div style={{ display: 'flex', gap: '12px' }}>
-                                    <button type="button" onClick={() => setRole('Student')}
-                                        style={{
-                                            flex: 1, padding: '10px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600,
-                                            cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.3s ease',
-                                            ...(role === 'Student' ? {
-                                                background: 'linear-gradient(to right, #a855f7, #ec4899)', color: '#fff',
-                                                border: '1px solid transparent', boxShadow: '0 4px 20px rgba(168,85,247,0.3)'
-                                            } : {
-                                                background: 'rgba(255,255,255,0.05)', color: '#9ca3af',
-                                                border: '1px solid rgba(255,255,255,0.1)'
-                                            })
-                                        }}>
-                                        🎒 Student
-                                    </button>
-                                    <button type="button" onClick={() => setRole('Admin')}
-                                        style={{
-                                            flex: 1, padding: '10px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600,
-                                            cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.3s ease',
-                                            ...(role === 'Admin' ? {
-                                                background: 'linear-gradient(to right, #6366f1, #a855f7)', color: '#fff',
-                                                border: '1px solid transparent', boxShadow: '0 4px 20px rgba(99,102,241,0.3)'
-                                            } : {
-                                                background: 'rgba(255,255,255,0.05)', color: '#9ca3af',
-                                                border: '1px solid rgba(255,255,255,0.1)'
-                                            })
-                                        }}>
-                                        🛡️ Admin
-                                    </button>
-                                </div>
-                            </div>
-
                             {error && <p style={{ color: '#f87171', fontSize: '0.84rem', fontWeight: 500, marginBottom: '12px' }}>{error}</p>}
                             {success && <p style={{ color: '#34d399', fontSize: '0.84rem', fontWeight: 500, marginBottom: '12px' }}>{success}</p>}
 
-                            <button type="submit" style={{
+                            <button type="submit" disabled={loading} style={{
                                 width: '100%', padding: '13px', borderRadius: '12px',
                                 background: 'linear-gradient(to right, #a855f7, #ec4899, #6366f1)',
                                 color: '#fff', fontWeight: 700, fontSize: '0.95rem', border: 'none',
-                                cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.3s ease'
+                                cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                                transition: 'all 0.3s ease', opacity: loading ? 0.7 : 1
                             }}
                             onMouseEnter={e => e.target.style.boxShadow = '0 6px 30px rgba(168,85,247,0.4)'}
                             onMouseLeave={e => e.target.style.boxShadow = 'none'}>
-                                Create Account
+                                {loading ? 'Creating Account...' : 'Create Account'}
                             </button>
                         </form>
 

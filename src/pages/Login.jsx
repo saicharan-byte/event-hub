@@ -4,33 +4,26 @@ import { useAuth } from '../context/AuthContext.jsx';
 import ParticleBackground from '../components/ParticleBackground.jsx';
 
 function Login() {
-    const [selectedRole, setSelectedRole] = useState(null);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    const handleCardClick = (role) => {
-        setSelectedRole(role);
-        setError('');
-    };
-
-    const handleBack = () => {
-        setSelectedRole(null);
-        setEmail('');
-        setPassword('');
-        setError('');
-    };
-
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
         if (!email.trim()) { setError('Please enter your email'); return; }
         if (!password) { setError('Please enter your password'); return; }
-        const result = login(email.trim(), password, selectedRole);
+
+        setLoading(true);
+        const result = await login(email.trim(), password);
+        setLoading(false);
+
         if (!result.success) { setError(result.message); return; }
-        navigate(result.role === 'Admin' ? '/admin' : '/student');
+        // role 2 = Admin, role 1 = User/Student
+        navigate(result.role === 2 ? '/admin' : '/student');
     };
 
     return (
@@ -46,7 +39,7 @@ function Login() {
 
             {/* Centered Layout */}
             <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-8">
-                <div className="w-full" style={{ maxWidth: '700px' }}>
+                <div className="w-full" style={{ maxWidth: '440px' }}>
 
                     {/* Hero */}
                     <div style={{ textAlign: 'center', marginBottom: '40px' }}>
@@ -69,126 +62,71 @@ function Login() {
                         </p>
                     </div>
 
-                    {/* Role Selection */}
-                    {!selectedRole && (
-                        <div>
-                            <h2 style={{ textAlign: 'center', fontSize: '1.2rem', fontWeight: 700, color: '#fff', marginBottom: '24px' }}>
-                                Select Your Role
-                            </h2>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
-                                {/* Admin Card */}
-                                <div onClick={() => handleCardClick('Admin')} className="glass"
-                                    style={{
-                                        borderRadius: '16px', padding: '32px 24px', textAlign: 'center', cursor: 'pointer',
-                                        position: 'relative', overflow: 'hidden', transition: 'all 0.3s ease'
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
-                                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: 'linear-gradient(to right, #6366f1, #a855f7)', borderRadius: '16px 16px 0 0' }} />
-                                    <div style={{ fontSize: '2.8rem', marginBottom: '12px' }}>🛡️</div>
-                                    <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>Admin Portal</h3>
-                                    <p style={{ fontSize: '0.85rem', color: '#9ca3af', lineHeight: 1.6 }}>
-                                        Create &amp; manage events, view student registrations, and oversee your campus activities.
-                                    </p>
-                                </div>
+                    {/* Login Form */}
+                    <div className="glass-strong" style={{
+                        borderRadius: '16px', padding: '36px 32px'
+                    }}>
+                        <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#fff', marginBottom: '28px' }}>
+                            🔐 Login
+                        </h2>
 
-                                {/* Student Card */}
-                                <div onClick={() => handleCardClick('Student')} className="glass"
+                        <form onSubmit={handleLogin}>
+                            <div style={{ marginBottom: '20px' }}>
+                                <label htmlFor="login-email" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#9ca3af', marginBottom: '8px' }}>
+                                    Email Address
+                                </label>
+                                <input
+                                    id="login-email" type="email" placeholder="you@college.edu"
+                                    value={email} onChange={(e) => setEmail(e.target.value)}
                                     style={{
-                                        borderRadius: '16px', padding: '32px 24px', textAlign: 'center', cursor: 'pointer',
-                                        position: 'relative', overflow: 'hidden', transition: 'all 0.3s ease'
+                                        width: '100%', padding: '12px 16px', borderRadius: '12px',
+                                        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                                        color: '#fff', fontSize: '0.95rem', outline: 'none', fontFamily: 'inherit',
+                                        boxSizing: 'border-box', transition: 'border-color 0.3s'
                                     }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
-                                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: 'linear-gradient(to right, #a855f7, #ec4899)', borderRadius: '16px 16px 0 0' }} />
-                                    <div style={{ fontSize: '2.8rem', marginBottom: '12px' }}>🎒</div>
-                                    <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>Student Portal</h3>
-                                    <p style={{ fontSize: '0.85rem', color: '#9ca3af', lineHeight: 1.6 }}>
-                                        Discover exciting events, register with ease, and never miss out on campus happenings.
-                                    </p>
-                                </div>
+                                    onFocus={e => e.target.style.borderColor = '#6366f1'}
+                                    onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                                />
                             </div>
 
-                            <p style={{ textAlign: 'center', fontSize: '0.85rem', color: '#6b7280' }}>
-                                Don&apos;t have an account?{' '}
-                                <Link to="/signup" style={{ color: '#818cf8', fontWeight: 600, textDecoration: 'none' }}>Sign up here</Link>
-                            </p>
-                        </div>
-                    )}
+                            <div style={{ marginBottom: '20px' }}>
+                                <label htmlFor="login-password" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#9ca3af', marginBottom: '8px' }}>
+                                    Password
+                                </label>
+                                <input
+                                    id="login-password" type="password" placeholder="Enter your password"
+                                    value={password} onChange={(e) => setPassword(e.target.value)}
+                                    style={{
+                                        width: '100%', padding: '12px 16px', borderRadius: '12px',
+                                        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                                        color: '#fff', fontSize: '0.95rem', outline: 'none', fontFamily: 'inherit',
+                                        boxSizing: 'border-box', transition: 'border-color 0.3s'
+                                    }}
+                                    onFocus={e => e.target.style.borderColor = '#6366f1'}
+                                    onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                                />
+                            </div>
 
-                    {/* Login Form */}
-                    {selectedRole && (
-                        <div className="glass-strong" style={{
-                            borderRadius: '16px', padding: '36px 32px', maxWidth: '440px', margin: '0 auto'
-                        }}>
-                            <button onClick={handleBack} style={{
-                                background: 'none', border: 'none', color: '#9ca3af', fontSize: '0.85rem',
-                                cursor: 'pointer', padding: 0, marginBottom: '16px', fontFamily: 'inherit'
-                            }}>
-                                ← Back
+                            {error && <p style={{ color: '#f87171', fontSize: '0.84rem', fontWeight: 500, marginBottom: '16px' }}>{error}</p>}
+
+                            <button type="submit" disabled={loading} style={{
+                                width: '100%', padding: '13px', borderRadius: '12px',
+                                background: 'linear-gradient(to right, #6366f1, #a855f7, #ec4899)',
+                                color: '#fff', fontWeight: 700, fontSize: '0.95rem', border: 'none',
+                                cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', marginTop: '4px',
+                                transition: 'all 0.3s ease', opacity: loading ? 0.7 : 1
+                            }}
+                            onMouseEnter={e => e.target.style.boxShadow = '0 6px 30px rgba(99,102,241,0.4)'}
+                            onMouseLeave={e => e.target.style.boxShadow = 'none'}>
+                                {loading ? 'Logging in...' : "Let's Go"}
                             </button>
-                            <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#fff', marginBottom: '28px' }}>
-                                {selectedRole === 'Admin' ? '🛡️' : '🎒'} {selectedRole} Login
-                            </h2>
+                        </form>
 
-                            <form onSubmit={handleLogin}>
-                                <div style={{ marginBottom: '20px' }}>
-                                    <label htmlFor="login-email" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#9ca3af', marginBottom: '8px' }}>
-                                        Email Address
-                                    </label>
-                                    <input
-                                        id="login-email" type="email" placeholder="you@college.edu"
-                                        value={email} onChange={(e) => setEmail(e.target.value)}
-                                        style={{
-                                            width: '100%', padding: '12px 16px', borderRadius: '12px',
-                                            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                                            color: '#fff', fontSize: '0.95rem', outline: 'none', fontFamily: 'inherit',
-                                            boxSizing: 'border-box', transition: 'border-color 0.3s'
-                                        }}
-                                        onFocus={e => e.target.style.borderColor = '#6366f1'}
-                                        onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
-                                    />
-                                </div>
-
-                                <div style={{ marginBottom: '20px' }}>
-                                    <label htmlFor="login-password" style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#9ca3af', marginBottom: '8px' }}>
-                                        Password
-                                    </label>
-                                    <input
-                                        id="login-password" type="password" placeholder="Enter your password"
-                                        value={password} onChange={(e) => setPassword(e.target.value)}
-                                        style={{
-                                            width: '100%', padding: '12px 16px', borderRadius: '12px',
-                                            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                                            color: '#fff', fontSize: '0.95rem', outline: 'none', fontFamily: 'inherit',
-                                            boxSizing: 'border-box', transition: 'border-color 0.3s'
-                                        }}
-                                        onFocus={e => e.target.style.borderColor = '#6366f1'}
-                                        onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
-                                    />
-                                </div>
-
-                                {error && <p style={{ color: '#f87171', fontSize: '0.84rem', fontWeight: 500, marginBottom: '16px' }}>{error}</p>}
-
-                                <button type="submit" style={{
-                                    width: '100%', padding: '13px', borderRadius: '12px',
-                                    background: 'linear-gradient(to right, #6366f1, #a855f7, #ec4899)',
-                                    color: '#fff', fontWeight: 700, fontSize: '0.95rem', border: 'none',
-                                    cursor: 'pointer', fontFamily: 'inherit', marginTop: '4px',
-                                    transition: 'all 0.3s ease'
-                                }}
-                                onMouseEnter={e => e.target.style.boxShadow = '0 6px 30px rgba(99,102,241,0.4)'}
-                                onMouseLeave={e => e.target.style.boxShadow = 'none'}>
-                                    Login as {selectedRole}
-                                </button>
-                            </form>
-
-                            <p style={{ textAlign: 'center', fontSize: '0.85rem', color: '#6b7280', marginTop: '20px' }}>
-                                Don&apos;t have an account?{' '}
-                                <Link to="/signup" style={{ color: '#818cf8', fontWeight: 600, textDecoration: 'none' }}>Sign up here</Link>
-                            </p>
-                        </div>
-                    )}
+                        <p style={{ textAlign: 'center', fontSize: '0.85rem', color: '#6b7280', marginTop: '20px' }}>
+                            Don&apos;t have an account?{' '}
+                            <Link to="/signup" style={{ color: '#818cf8', fontWeight: 600, textDecoration: 'none' }}>Sign up here</Link>
+                        </p>
+                    </div>
                 </div>
 
                 {/* Footer */}

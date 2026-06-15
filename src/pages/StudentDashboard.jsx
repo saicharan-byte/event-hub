@@ -3,14 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useEvents } from '../context/EventContext.jsx';
 import RegistrationModal from '../components/RegistrationModal.jsx';
+import TaskManager from '../components/TaskManager.jsx';
 
 function StudentDashboard() {
     const [activePage, setActivePage] = useState('overview');
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [confirmCancel, setConfirmCancel] = useState(null);
+    // Vector Search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState(null);
+    const [searchLoading, setSearchLoading] = useState(false);
     const { user, logout } = useAuth();
-    const { events, registrations, removeRegistration } = useEvents();
+    const { events, registrations, removeRegistration, searchEvents } = useEvents();
     const navigate = useNavigate();
 
     const myRegs = registrations.filter(r => r.email === user?.email);
@@ -23,11 +28,28 @@ function StudentDashboard() {
     const getEventDate = (name) => { const ev = events.find(e => e.name === name); return ev ? ev.date : ''; };
 
     const handleLogout = () => { logout(); navigate('/'); };
-    const handleCancelReg = (reg) => { removeRegistration(reg.email, reg.eventName); setConfirmCancel(null); };
+    const handleCancelReg = (reg) => { removeRegistration(reg._id); setConfirmCancel(null); };
+
+    // Vector Search handler
+    const handleVectorSearch = async () => {
+        if (!searchQuery.trim()) return;
+        setSearchLoading(true);
+        try {
+            const data = await searchEvents(searchQuery.trim());
+            setSearchResults(data);
+        } catch (err) {
+            console.error('Search failed:', err);
+        } finally {
+            setSearchLoading(false);
+        }
+    };
+
+    const iS={width:'100%',padding:'12px 16px',borderRadius:'12px',background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',color:'#fff',fontSize:'0.95rem',outline:'none',fontFamily:'inherit',boxSizing:'border-box'};
 
     const sideItems = [
         {id:'overview',label:'Dashboard',icon:'📊'},{id:'register',label:'Register for Events',icon:'🎯'},
         {id:'my-events',label:'My Registrations',icon:'📋'},{id:'edit-reg',label:'Edit Registration',icon:'✏️'},
+        {id:'tasks',label:'My Tasks',icon:'📝'},
         {id:'profile',label:'My Profile',icon:'👤'}
     ];
     const stats = [
@@ -83,8 +105,74 @@ function StudentDashboard() {
                     </div>}
 
                     {activePage==='register'&&<div>
-                        <div style={{marginBottom:'32px'}}><h1 style={{fontSize:'1.8rem',fontWeight:800,color:'#fff',marginBottom:'6px'}}>Register for Events</h1><p style={{fontSize:'0.95rem',color:'#9ca3af'}}>Browse available events and register.</p></div>
-                        {available.length===0?<div className="glass" style={{borderRadius:'16px',padding:'40px',textAlign:'center',color:'#6b7280'}}>{events.length===0?'No events available.':'🎉 You\'ve registered for all events!'}</div>:
+                        <div style={{marginBottom:'32px'}}><h1 style={{fontSize:'1.8rem',fontWeight:800,color:'#fff',marginBottom:'6px'}}>Register for Events</h1><p style={{fontSize:'0.95rem',color:'#9ca3af'}}>Browse available events and register. <span style={{color:'#c084fc',fontWeight:600}}>Vector Search</span> is available below.</p></div>
+                        
+                        {/* Vector Search Section integrated into Register Events */}
+                        <div className="glass" style={{borderRadius:'16px',padding:'32px',marginBottom:'36px', borderTop:'4px solid #c084fc'}}>
+                            <div style={{display:'flex', alignItems:'center', gap:'12px', marginBottom:'20px'}}>
+                                <span style={{fontSize:'2rem'}}>🧠</span>
+                                <div>
+                                    <h3 style={{fontSize:'1.3rem',fontWeight:700,color:'#fff',marginBottom:'4px'}}>Semantic Event Search</h3>
+                                    <p style={{fontSize:'0.85rem',color:'#9ca3af'}}>Type a natural language query to find events by meaning, not just exact words.</p>
+                                </div>
+                            </div>
+                            <div style={{display:'flex',gap:'12px', marginBottom:'16px'}}>
+                                <input type="text" placeholder='Try: "coding contest", "artificial intelligence", "sports"' value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleVectorSearch()} style={{...iS,flex:1,fontSize:'1rem',padding:'14px 20px'}}/>
+                                <button onClick={handleVectorSearch} disabled={searchLoading||!searchQuery.trim()} style={{padding:'14px 28px',borderRadius:'12px',background:searchLoading?'#4b5563':'linear-gradient(135deg,#a855f7,#ec4899)',color:'#fff',fontWeight:700,fontSize:'0.95rem',border:'none',cursor:searchLoading?'wait':'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{searchLoading?'⏳ Searching...':'🔍 Search'}</button>
+                            </div>
+                            
+                            <div style={{display:'flex',alignItems:'center',gap:'12px', justifyContent:'space-between'}}>
+                                <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+                                    {['coding competition','tech conference','sports event'].map(s=>(
+                                        <button key={s} onClick={()=>{setSearchQuery(s);}} style={{padding:'4px 12px',borderRadius:'50px',background:'rgba(168,85,247,0.1)',border:'1px solid rgba(168,85,247,0.2)',color:'#c084fc',fontSize:'0.75rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{s}</button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Search Results */}
+                            {searchResults&&<div style={{marginTop:'24px', paddingTop:'24px', borderTop:'1px solid rgba(255,255,255,0.1)'}}>
+                                <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'16px'}}>
+                                    <h4 style={{fontSize:'1rem',fontWeight:700,color:'#fff'}}>Search Results</h4>
+                                    <span style={{fontSize:'0.7rem',padding:'3px 10px',borderRadius:'50px',background:'rgba(168,85,247,0.15)',color:'#c084fc',fontWeight:700}}>{searchResults.totalResults} found</span>
+                                </div>
+
+                                {searchResults.totalResults===0?<div style={{padding:'20px',textAlign:'center',color:'#6b7280',fontSize:'0.9rem'}}>No matching events found.</div>:
+                                <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+                                    {searchResults.results.map((r,i)=>{
+                                        const pct = Math.round(r.similarity*100);
+                                        const color = pct>=80?'#10b981':pct>=50?'#f59e0b':pct>=30?'#f97316':'#ef4444';
+                                        const alreadyReg = regNames.includes(r.name);
+                                        const expiredEvent = isExpired(r.date);
+                                        const canRegister = !alreadyReg && !expiredEvent;
+                                        
+                                        return <div key={i} style={{background:'rgba(0,0,0,0.2)',borderRadius:'12px',padding:'12px 16px',borderLeft:`3px solid ${color}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                            <div>
+                                                <div style={{fontWeight:700,color:'#fff',fontSize:'0.95rem'}}>{r.name}</div>
+                                                <div style={{fontSize:'0.75rem',color:'#9ca3af',marginTop:'2px'}}>📆 {r.date ? new Date(r.date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : 'N/A'}</div>
+                                            </div>
+                                            <div style={{textAlign:'right', display:'flex', alignItems:'center', gap:'16px'}}>
+                                                <div style={{textAlign:'right'}}>
+                                                    <div style={{fontSize:'1.2rem',fontWeight:800,color}}>{pct}%</div>
+                                                    <div style={{fontSize:'0.65rem',color:'#6b7280',fontWeight:600,textTransform:'uppercase'}}>Match</div>
+                                                </div>
+                                                <div style={{borderLeft:'1px solid rgba(255,255,255,0.1)', paddingLeft:'16px'}}>
+                                                    {canRegister ? 
+                                                        <button onClick={()=>setSelectedEvent(r.name)} style={{padding:'6px 16px',borderRadius:'8px',background:'linear-gradient(to right,#a855f7,#ec4899)',color:'#fff',fontSize:'0.8rem',fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit'}}>Register</button>
+                                                    : alreadyReg ?
+                                                        <span style={{fontSize:'0.75rem',color:'#34d399',fontWeight:700,padding:'6px 12px',background:'rgba(16,185,129,0.1)',borderRadius:'8px'}}>✓ Registered</span>
+                                                    : 
+                                                        <span style={{fontSize:'0.75rem',color:'#f87171',fontWeight:700,padding:'6px 12px',background:'rgba(239,68,68,0.1)',borderRadius:'8px'}}>Expired</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>;
+                                    })}
+                                </div>}
+                            </div>}
+                        </div>
+
+                        <h2 style={{fontSize:'1.2rem',fontWeight:700,color:'#fff',marginBottom:'20px'}}>All Available Events</h2>
+                        {available.length===0?<div className="glass" style={{borderRadius:'16px',padding:'40px',textAlign:'center',color:'#6b7280'}}>{events.length===0?'No events available.':events.filter(e=>!isExpired(e.date)).length===0?'⏰ No upcoming events available right now.':'🎉 You\'ve registered for all upcoming events!'}</div>:
                         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:'20px',marginBottom:'36px'}}>{available.map((ev,i)=><div key={i} className="glass" style={{borderRadius:'16px',overflow:'hidden'}}>
                             <div style={{height:'4px',background:'linear-gradient(to right,#a855f7,#ec4899)'}}/>
                             <div style={{padding:'24px',textAlign:'center'}}><div style={{fontSize:'2rem',marginBottom:'10px'}}>🎯</div><h3 style={{fontSize:'1rem',fontWeight:700,color:'#fff',marginBottom:'4px'}}>{ev.name}</h3><p style={{fontSize:'0.82rem',color:'#c084fc',fontWeight:600,marginBottom:'14px'}}>📆 {fmt(ev.date)}</p><button onClick={()=>setSelectedEvent(ev.name)} style={{width:'100%',padding:'10px',borderRadius:'12px',background:'linear-gradient(to right,#a855f7,#ec4899)',color:'#fff',fontSize:'0.85rem',fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit'}}>Register Now</button></div>
@@ -118,15 +206,17 @@ function StudentDashboard() {
                         {myRegs.length===0?<div className="glass" style={{borderRadius:'16px',padding:'40px',textAlign:'center',color:'#6b7280'}}>No registrations to edit.</div>:
                         <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>{myRegs.map((r,i)=><div key={i} className="glass" style={{borderRadius:'16px',padding:'18px 22px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                             <div style={{display:'flex',alignItems:'center',gap:'14px'}}><span style={{fontSize:'1.4rem'}}>🎯</span><div><div style={{fontWeight:600,color:'#fff',fontSize:'0.95rem'}}>{r.eventName}</div><div style={{fontSize:'0.78rem',color:'#6b7280',marginTop:'2px'}}>📆 {fmt(getEventDate(r.eventName))} · {r.studentName} · {r.email}</div></div></div>
-                            {confirmCancel===`${r.email}-${r.eventName}`?<div style={{display:'flex',alignItems:'center',gap:'8px'}}><span style={{fontSize:'0.82rem',color:'#f87171',fontWeight:600}}>Cancel?</span><button onClick={()=>handleCancelReg(r)} style={{padding:'6px 16px',background:'#ef4444',color:'#fff',border:'none',borderRadius:'8px',fontSize:'0.8rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Yes</button><button onClick={()=>setConfirmCancel(null)} style={{padding:'6px 16px',background:'transparent',color:'#9ca3af',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'8px',fontSize:'0.8rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>No</button></div>
-                            :<button onClick={()=>setConfirmCancel(`${r.email}-${r.eventName}`)} style={{padding:'8px 18px',background:'transparent',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'12px',color:'#f87171',fontSize:'0.82rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>🗑️ Cancel</button>}
+                            {confirmCancel===r._id?<div style={{display:'flex',alignItems:'center',gap:'8px'}}><span style={{fontSize:'0.82rem',color:'#f87171',fontWeight:600}}>Cancel?</span><button onClick={()=>handleCancelReg(r)} style={{padding:'6px 16px',background:'#ef4444',color:'#fff',border:'none',borderRadius:'8px',fontSize:'0.8rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Yes</button><button onClick={()=>setConfirmCancel(null)} style={{padding:'6px 16px',background:'transparent',color:'#9ca3af',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'8px',fontSize:'0.8rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>No</button></div>
+                            :<button onClick={()=>setConfirmCancel(r._id)} style={{padding:'8px 18px',background:'transparent',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'12px',color:'#f87171',fontSize:'0.82rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>🗑️ Cancel</button>}
                         </div>)}</div>}
                     </div>}
+
+                    {activePage==='tasks'&&<TaskManager />}
 
                     {activePage==='profile'&&<div>
                         <div style={{marginBottom:'32px'}}><h1 style={{fontSize:'1.8rem',fontWeight:800,color:'#fff',marginBottom:'6px'}}>My Profile</h1><p style={{fontSize:'0.95rem',color:'#9ca3af'}}>Your account information.</p></div>
                         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:'20px'}}>
-                            {[{t:'👤 Personal Info',r:[['Name',user?.name||'N/A'],['Email',user?.email||'N/A'],['Role',user?.role||'Student']]},{t:'📈 Activity Summary',r:[['Events Registered',myRegs.length],['Available Events',available.length],['Total Events',events.length]]}].map((c,i)=>(
+                            {[{t:'👤 Personal Info',r:[['Name',user?.name||'N/A'],['Email',user?.email||'N/A'],['Role', user?.role === 2 ? 'Admin' : 'User']]},{t:'📈 Activity Summary',r:[['Events Registered',myRegs.length],['Available Events',available.length],['Total Events',events.length]]}].map((c,i)=>(
                                 <div key={i} className="glass" style={{borderRadius:'16px',padding:'28px'}}><h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#fff',marginBottom:'20px',paddingBottom:'12px',borderBottom:'1px solid rgba(255,255,255,0.1)'}}>{c.t}</h3>{c.r.map(([l,v],j)=><div key={j} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderTop:j>0?'1px solid rgba(255,255,255,0.03)':'none'}}><span style={{fontSize:'0.88rem',color:'#9ca3af'}}>{l}</span><span style={{fontSize:'0.88rem',color:'#fff',fontWeight:600}}>{v}</span></div>)}</div>
                             ))}
                         </div>
